@@ -18,7 +18,7 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -33,17 +33,22 @@ class StatCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
-                style: AppTheme.label.copyWith(
-                  fontSize: 11,
-                  letterSpacing: 1,
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTheme.label.copyWith(
+                    fontSize: 11,
+                    letterSpacing: 1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 4),
               Icon(
                 icon,
                 size: 18,
@@ -51,24 +56,30 @@ class StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                value,
-                style: AppTheme.heading2.copyWith(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: AppTheme.heading2.copyWith(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 4),
               Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   unit,
                   style: AppTheme.bodySmall.copyWith(
-                    fontSize: 14,
+                    fontSize: 12,
                   ),
                 ),
               ),

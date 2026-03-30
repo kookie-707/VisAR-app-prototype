@@ -1,19 +1,39 @@
 import 'package:flutter/foundation.dart';
 import '../models/hud_element.dart';
+import '../models/app_config.dart';
+import '../services/pi_connection_service.dart';
 
 class AppStateProvider extends ChangeNotifier {
+  // ── Pi Connection Service ──
+  final PiConnectionService piService = PiConnectionService();
+
   // ── Connection State ──
-  bool _isConnected = false;
-  bool get isConnected => _isConnected;
+  PiConnectionState get connectionState => piService.connectionState;
+  bool get isConnected => piService.isConnected;
 
   // ── Ride Data ──
-  double _currentSpeed = 0.0;
-  int _helmetBattery = 85;
   bool _isRiding = false;
-
-  double get currentSpeed => _currentSpeed;
-  int get helmetBattery => _helmetBattery;
   bool get isRiding => _isRiding;
+
+  // ── Live Pi Telemetry ──
+  double get piFps => piService.fps;
+  String get fcwStatus => piService.fcwStatus;
+  String get navStep => piService.navStep;
+  String get navArrow => piService.navArrow;
+  double get navDistM => piService.navDistM;
+  int get detectionCount => piService.detectionCount;
+  double get laneConfidence => piService.laneConfidence;
+  String get systemMode => piService.systemMode;
+
+  // ── ESP32 Telemetry ──
+  double get esp32LeanDeg => piService.leanDeg;
+  String get esp32BlindspotLeft => piService.blindspotLeft;
+  String get esp32BlindspotRight => piService.blindspotRight;
+  bool get esp32LeftPresent => piService.leftPresent;
+  bool get esp32RightPresent => piService.rightPresent;
+  String get esp32Mode => piService.esp32Mode;
+
+  String piIpAddress = '192.168.1.70';
 
   // ── Safety Constants ──
   static const int maxElementsPerZone = 3;
@@ -35,7 +55,6 @@ class AppStateProvider extends ChangeNotifier {
   // ── HUD Settings ──
   double _brightness = 0.8;
   double _transparency = 0.3;
-
   double get brightness => _brightness;
   double get transparency => _transparency;
 
@@ -48,20 +67,13 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Analytics Data ──
-  int _totalRides = 47;
-  double _totalDistance = 2847.5;
-  double _averageSpeed = 68.5;
-  double _maxSpeed = 142.3;
-  int _totalRidingTime = 1245;
-  double _safetyScore = 87.5;
-
-  int get totalRides => _totalRides;
-  double get totalDistance => _totalDistance;
-  double get averageSpeed => _averageSpeed;
-  double get maxSpeed => _maxSpeed;
-  int get totalRidingTime => _totalRidingTime;
-  double get safetyScore => _safetyScore;
+  // ── Analytics Data (Placeholder — will be replaced with local DB later) ──
+  int get totalRides => 0;
+  double get totalDistance => 0;
+  double get averageSpeed => 0;
+  double get maxSpeed => 0;
+  int get totalRidingTime => 0;
+  double get safetyScore => 0;
 
   // ── Derived ──
   int activeElementCount() =>
@@ -80,18 +92,42 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   // ── Methods ──
-  void toggleConnection() {
-    _isConnected = !_isConnected;
-    if (!_isConnected) {
-      _isRiding = false;
-      _currentSpeed = 0.0;
-    }
+  void connectToPi(String ipAddress, {AppConfig? config}) {
+    piIpAddress = ipAddress;
+    piService.onTelemetryUpdate = () {
+      notifyListeners();
+    };
+    piService.onConnectionChanged = () {
+      if (!piService.isConnected) {
+        _isRiding = false;
+      } else if (piService.isConnected && config != null) {
+        // Auto-sync config on every successful connection
+        piService.sendConfigSync(config!.toJson());
+      }
+      notifyListeners();
+    };
+    piService.connect(ipAddress);
+  }
+
+  void disconnectPi() {
+    piService.stopGpsStream();
+    piService.disconnect();
+    _isRiding = false;
     notifyListeners();
   }
 
+  void toggleConnection({AppConfig? config}) {
+    if (isConnected) {
+      disconnectPi();
+    } else {
+      connectToPi(piIpAddress, config: config);
+    }
+  }
+
   void startRide() {
-    if (_isConnected && !_isRiding) {
+    if (isConnected && !_isRiding) {
       _isRiding = true;
+      piService.startGpsStream();
       notifyListeners();
     }
   }
@@ -99,24 +135,18 @@ class AppStateProvider extends ChangeNotifier {
   void stopRide() {
     if (_isRiding) {
       _isRiding = false;
-      _currentSpeed = 0.0;
+      piService.stopGpsStream();
       notifyListeners();
     }
   }
 
-  void updateSpeed(double speed) {
-    if (_isRiding) {
-      _currentSpeed = speed;
-      notifyListeners();
-    }
+  /// Handle app lifecycle resume.
+  void onAppResumed() {
+    piService.onAppResumed();
   }
 
-  void updateBattery(int battery) {
-    _helmetBattery = battery;
-    notifyListeners();
-  }
+  // ── HUD Element management (unchanged) ──
 
-  /// Toggle element on/off. Returns false + sets warning if blocked by safety.
   bool toggleHUDElement(int index) {
     final element = _hudElements[index];
     _safetyWarning = null;
@@ -144,7 +174,6 @@ class AppStateProvider extends ChangeNotifier {
     return true;
   }
 
-  /// Move element to a new zone. Returns false + sets warning if zone full.
   bool moveElementToZone(int index, VisorZone newZone) {
     final element = _hudElements[index];
     _safetyWarning = null;
@@ -173,7 +202,6 @@ class AppStateProvider extends ChangeNotifier {
     return true;
   }
 
-  /// Update position within zone, checking for overlap.
   bool updateHUDElementPosition(int index, double x, double y) {
     final element = _hudElements[index];
 

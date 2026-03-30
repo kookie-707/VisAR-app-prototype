@@ -1,7 +1,7 @@
 name: visar_app
 description: Cross-platform companion app for an AR Motorcycle Smart Helmet Visor.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+1
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -12,6 +12,13 @@ dependencies:
   provider: ^6.1.2
   google_fonts: ^6.3.0
   fl_chart: ^1.1.0
+  web_socket_channel: ^3.0.1
+  geolocator: ^13.0.2
+  permission_handler: ^11.3.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  shared_preferences: ^2.3.4
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

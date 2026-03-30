@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import '../theme/app_theme.dart';
 import '../providers/app_state_provider.dart';
+import '../services/pi_connection_service.dart' show PiConnectionState;
+import '../services/config_service.dart';
 
 class ConnectionStatusWidget extends StatefulWidget {
   const ConnectionStatusWidget({super.key});
@@ -30,12 +32,65 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
     super.dispose();
   }
 
+  Color _stateColor(PiConnectionState state) {
+    switch (state) {
+      case PiConnectionState.connected:
+        return AppTheme.accentRed;
+      case PiConnectionState.connecting:
+      case PiConnectionState.handshaking:
+        return Colors.amber;
+      case PiConnectionState.reconnecting:
+        return Colors.orange;
+      case PiConnectionState.disconnected:
+        return Colors.grey;
+    }
+  }
+
+  String _stateLabel(PiConnectionState state) {
+    switch (state) {
+      case PiConnectionState.connected:
+        return 'CONNECTED';
+      case PiConnectionState.connecting:
+        return 'CONNECTING...';
+      case PiConnectionState.handshaking:
+        return 'HANDSHAKING...';
+      case PiConnectionState.reconnecting:
+        return 'RECONNECTING...';
+      case PiConnectionState.disconnected:
+        return 'DISCONNECTED';
+    }
+  }
+
+  String _stateHint(PiConnectionState state) {
+    switch (state) {
+      case PiConnectionState.connected:
+        return 'Tap to disconnect';
+      case PiConnectionState.connecting:
+      case PiConnectionState.handshaking:
+        return 'Establishing link...';
+      case PiConnectionState.reconnecting:
+        return 'Tap to cancel';
+      case PiConnectionState.disconnected:
+        return 'Tap to connect';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppStateProvider>(
       builder: (context, appState, _) {
+        final state = appState.connectionState;
+        final color = _stateColor(state);
+        final isActive = state == PiConnectionState.connected;
+        final isAnimating = state == PiConnectionState.connecting ||
+            state == PiConnectionState.handshaking ||
+            state == PiConnectionState.reconnecting;
+
         return GestureDetector(
-          onTap: () => appState.toggleConnection(),
+          onTap: () {
+            final configService = Provider.of<ConfigService>(context, listen: false);
+            appState.toggleConnection(config: configService.config);
+          },
           child: Column(
             children: [
               SizedBox(
@@ -45,7 +100,7 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
                   alignment: Alignment.center,
                   children: [
                     // Glowing Ring Animation
-                    if (appState.isConnected)
+                    if (isActive || isAnimating)
                       AnimatedBuilder(
                         animation: _ringController,
                         builder: (context, child) {
@@ -53,6 +108,7 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
                             size: const Size(120, 120),
                             painter: GlowingRingPainter(
                               progress: _ringController.value,
+                              color: color,
                             ),
                           );
                         },
@@ -65,15 +121,13 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
                         shape: BoxShape.circle,
                         color: AppTheme.cardDark,
                         border: Border.all(
-                          color: appState.isConnected
-                              ? AppTheme.accentRed
-                              : Colors.grey[800]!,
+                          color: isActive ? color : Colors.grey[800]!,
                           width: 2,
                         ),
-                        boxShadow: appState.isConnected
+                        boxShadow: isActive
                             ? [
                                 BoxShadow(
-                                  color: AppTheme.accentRed.withOpacity(0.5),
+                                  color: color.withOpacity(0.5),
                                   blurRadius: 20,
                                   spreadRadius: 2,
                                 ),
@@ -83,8 +137,8 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
                       child: Icon(
                         Icons.sports_motorsports,
                         size: 50,
-                        color: appState.isConnected
-                            ? AppTheme.accentRed
+                        color: (isActive || isAnimating)
+                            ? color
                             : Colors.grey[600],
                       ),
                     ),
@@ -92,21 +146,23 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                appState.isConnected ? 'CONNECTED' : 'DISCONNECTED',
-                style: AppTheme.heading3.copyWith(
-                  color: appState.isConnected
-                      ? AppTheme.accentRed
-                      : Colors.grey[500],
-                  fontSize: 16,
-                  letterSpacing: 2,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _stateLabel(state),
+                  style: AppTheme.heading3.copyWith(
+                    color: (isActive || isAnimating) ? color : Colors.grey[500],
+                    fontSize: 16,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'Tap to ${appState.isConnected ? 'disconnect' : 'connect'}',
-                style: AppTheme.bodySmall.copyWith(
-                  fontSize: 11,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _stateHint(state),
+                  style: AppTheme.bodySmall.copyWith(fontSize: 11),
                 ),
               ),
             ],
@@ -119,8 +175,9 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
 
 class GlowingRingPainter extends CustomPainter {
   final double progress;
+  final Color color;
 
-  GlowingRingPainter({required this.progress});
+  GlowingRingPainter({required this.progress, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -128,23 +185,20 @@ class GlowingRingPainter extends CustomPainter {
     final radius = size.width / 2;
 
     final paint = Paint()
-      ..color = AppTheme.accentRed.withOpacity(0.3)
+      ..color = color.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
 
-    // Draw multiple rings with varying opacity
     for (int i = 0; i < 3; i++) {
       final adjustedProgress = (progress + (i * 0.33)) % 1.0;
       final currentRadius = radius + (adjustedProgress * 15);
       final opacity = 1.0 - adjustedProgress;
-
-      paint.color = AppTheme.accentRed.withOpacity(opacity * 0.4);
+      paint.color = color.withOpacity(opacity * 0.4);
       canvas.drawCircle(center, currentRadius, paint);
     }
 
-    // Draw main pulsing ring
     final mainPaint = Paint()
-      ..color = AppTheme.accentRed.withOpacity(0.6 + (math.sin(progress * 2 * math.pi) * 0.2))
+      ..color = color.withOpacity(0.6 + (math.sin(progress * 2 * math.pi) * 0.2))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
@@ -153,6 +207,6 @@ class GlowingRingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(GlowingRingPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

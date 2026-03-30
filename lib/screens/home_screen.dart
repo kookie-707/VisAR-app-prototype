@@ -17,6 +17,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
 
+
   @override
   void initState() {
     super.initState();
@@ -78,25 +79,56 @@ class _HomeScreenState extends State<HomeScreen>
                             children: [
                               Expanded(
                                 child: StatCard(
-                                  label: 'SPEED',
-                                  value: appState.isConnected && appState.isRiding
-                                      ? '${appState.currentSpeed.toInt()}'
+                                  label: 'PI FPS',
+                                  value: appState.isConnected
+                                      ? appState.piFps.toStringAsFixed(1)
                                       : '--',
-                                  unit: 'km/h',
+                                  unit: 'fps',
                                   icon: Icons.speed,
                                 ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: StatCard(
-                                  label: 'BATTERY',
-                                  value: '${appState.helmetBattery}',
-                                  unit: '%',
-                                  icon: Icons.battery_charging_full,
+                                  label: 'OBJECTS',
+                                  value: appState.isConnected
+                                      ? '${appState.detectionCount}'
+                                      : '--',
+                                  unit: 'detected',
+                                  icon: Icons.visibility,
                                 ),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: StatCard(
+                                  label: 'LEAN',
+                                  value: appState.isConnected
+                                      ? '${appState.esp32LeanDeg.toStringAsFixed(1)}°'
+                                      : '--',
+                                  unit: 'deg',
+                                  icon: Icons.screen_rotation,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: StatCard(
+                                  label: 'ESP MODE',
+                                  value: appState.isConnected
+                                      ? appState.esp32Mode
+                                      : '--',
+                                  unit: '',
+                                  icon: Icons.memory,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          // Blindspot Radar Visual
+                          _buildBlindspotWidget(appState),
                         ],
                       );
                     },
@@ -229,9 +261,12 @@ class _HomeScreenState extends State<HomeScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: AppTheme.bodyMedium,
+        Expanded(
+          child: Text(
+            label,
+            style: AppTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -251,9 +286,149 @@ class _HomeScreenState extends State<HomeScreen>
               color: isActive ? AppTheme.accentRed : Colors.grey[400],
               fontWeight: FontWeight.w600,
             ),
+            softWrap: false,
+            overflow: TextOverflow.fade,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBlindspotWidget(AppStateProvider appState) {
+    final left = appState.isConnected ? appState.esp32BlindspotLeft : 'CLEAR';
+    final right = appState.isConnected ? appState.esp32BlindspotRight : 'CLEAR';
+    final leftPresent = appState.isConnected ? appState.esp32LeftPresent : false;
+    final rightPresent = appState.isConnected ? appState.esp32RightPresent : false;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderGray),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'BLINDSPOT RADAR',
+                style: AppTheme.label.copyWith(
+                  fontSize: 11,
+                  letterSpacing: 1,
+                ),
+              ),
+              Icon(Icons.radar, size: 18, color: AppTheme.accentRed),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              // Left Side
+              Expanded(child: _buildRadarSide('LEFT', left, leftPresent)),
+              // Center divider
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sports_motorsports,
+                      color: Colors.grey[400],
+                      size: 28,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: Colors.grey[700],
+                    ),
+                  ],
+                ),
+              ),
+              // Right Side
+              Expanded(child: _buildRadarSide('RIGHT', right, rightPresent)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadarSide(String side, String zone, bool present) {
+    Color zoneColor;
+    String zoneLabel;
+    IconData zoneIcon;
+
+    switch (zone) {
+      case 'BLIND':
+        zoneColor = Colors.red;
+        zoneLabel = 'DANGER';
+        zoneIcon = Icons.warning;
+        break;
+      case 'APPROACH':
+        zoneColor = Colors.orange;
+        zoneLabel = 'APPROACH';
+        zoneIcon = Icons.trending_flat;
+        break;
+      case 'FAR':
+        zoneColor = Colors.blue;
+        zoneLabel = 'FAR';
+        zoneIcon = Icons.remove_circle_outline;
+        break;
+      default:
+        zoneColor = Colors.green;
+        zoneLabel = 'CLEAR';
+        zoneIcon = Icons.check_circle_outline;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: zoneColor.withOpacity(present ? 0.15 : 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: zoneColor.withOpacity(present ? 0.6 : 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            side,
+            style: AppTheme.label.copyWith(
+              fontSize: 10,
+              letterSpacing: 1,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Icon(zoneIcon, color: zoneColor, size: 24),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              zoneLabel,
+              style: AppTheme.heading3.copyWith(
+                fontSize: 14,
+                color: zoneColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
