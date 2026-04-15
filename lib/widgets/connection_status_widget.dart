@@ -91,6 +91,47 @@ class _ConnectionStatusWidgetState extends State<ConnectionStatusWidget>
             final configService = Provider.of<ConfigService>(context, listen: false);
             appState.toggleConnection(config: configService.config);
           },
+          onLongPress: () {
+            final controller = TextEditingController(text: appState.piIpAddress);
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: const Color(0xFF1E1E2C),
+                title: const Text('Pi IP Address', style: TextStyle(color: Colors.white)),
+                content: TextField(
+                  controller: controller,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: '10.245.199.208',
+                    hintStyle: TextStyle(color: Colors.grey[600]),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: _stateColor(PiConnectionState.connected)),
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      final newIp = controller.text.trim();
+                      if (newIp.isNotEmpty) {
+                        appState.updatePiIp(newIp);
+                      }
+                      Navigator.pop(ctx);
+                    },
+                    child: Text('Save', style: TextStyle(color: _stateColor(PiConnectionState.connected))),
+                  ),
+                ],
+              ),
+            );
+          },
           child: Column(
             children: [
               SizedBox(

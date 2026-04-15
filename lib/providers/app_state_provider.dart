@@ -33,7 +33,12 @@ class AppStateProvider extends ChangeNotifier {
   bool get esp32RightPresent => piService.rightPresent;
   String get esp32Mode => piService.esp32Mode;
 
-  String piIpAddress = '192.168.1.70';
+  String piIpAddress = '10.245.199.208';
+
+  void updatePiIp(String newIp) {
+    piIpAddress = newIp;
+    notifyListeners();
+  }
 
   // ── Safety Constants ──
   static const int maxElementsPerZone = 3;
